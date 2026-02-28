@@ -274,7 +274,7 @@ docker-compose up --build
 
 | Service | URL |
 |---------|-----|
-| Frontend | http://localhost:3000 |
+| Frontend | http://localhost:5173 |
 | Backend API | http://localhost:5000/api |
 | OCR Service | http://localhost:8000 |
 | MongoDB | mongodb://localhost:27017 |
@@ -340,7 +340,7 @@ npm start
 # ─── Server ──────────────────────────────────────────────
 PORT=5000
 NODE_ENV=development
-CLIENT_URL=http://localhost:3000
+CLIENT_URL=http://localhost:5173
 
 # ─── MongoDB ─────────────────────────────────────────────
 # Local MongoDB
