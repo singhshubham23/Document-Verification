@@ -1,0 +1,22 @@
+{
+  "name": "healbharat-blockchain",
+  "version": "1.0.0",
+  "description": "HealBharat Smart Contracts — Polygon/Ethereum",
+  "scripts": {
+    "compile":        "hardhat compile",
+    "test":           "hardhat test",
+    "node":           "hardhat node",
+    "deploy:local":   "hardhat run scripts/deploy.js --network localhost",
+    "deploy:amoy":    "hardhat run scripts/deploy.js --network amoy",
+    "deploy:polygon": "hardhat run scripts/deploy.js --network polygon",
+    "verify":         "hardhat verify --network polygon"
+  },
+ "devDependencies": {
+  "hardhat": "^2.19.0",
+  "@nomicfoundation/hardhat-toolbox": "^4.0.0"
+},
+"dependencies": {
+  "ethers": "^6.9.0",
+  "dotenv": "^16.3.1"
+}
+}
