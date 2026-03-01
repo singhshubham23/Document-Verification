@@ -246,9 +246,6 @@ export default function Register() {
                     onChange={(e) => setForm({ ...form, institutionName: e.target.value })}
                     required={form.role === 'institution'}
                   />
-                  <p className="text-xs text-slate-600 font-mono">
-                    This will create or link to an existing institution record.
-                  </p>
                 </div>
               )}
 
