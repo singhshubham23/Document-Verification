@@ -1,161 +1,173 @@
-"""
-extractor.py
-Core extraction logic: OCR + regex/NLP parsing to pull structured
-certificate fields from raw text.
-"""
-
 import re
 import pytesseract
-import cv2
-import numpy as np
-from pathlib import Path
-from preprocessor import preprocess_image, pdf_to_images
-from typing import Optional
+from PIL import Image
+from preprocessor import load_and_preprocess
 
 
-# ── Tesseract config ──────────────────────────────────────────────────────────
+# Tesseract config — OEM 3 = LSTM, PSM 6 = assume uniform block of text
 TESS_CONFIG = "--oem 3 --psm 6 -l eng"
 
 
-def extract_certificate_data(file_path: str) -> dict:
+def extract_from_file(file_path: str) -> dict:
     """
-    Main entry point. Handles both images and PDFs.
-    Returns:
-        {
-          studentName, rollNumber, course, institution,
-          marks, certificateId, issueDate,
-          rawText, confidence
-        }
+    Main entry point.
+    Accepts image (jpg/png) or PDF path.
+    Returns structured dict of extracted certificate fields.
     """
-    ext = Path(file_path).suffix.lower()
+    pages = load_and_preprocess(file_path)
 
-    if ext == ".pdf":
-        images = pdf_to_images(file_path)
-        raw_texts = [pytesseract.image_to_string(img, config=TESS_CONFIG) for img in images]
-        raw_text = "\n".join(raw_texts)
-        # Use first page image for confidence
-        conf_img = images[0] if images else None
-    else:
-        processed = preprocess_image(file_path)
-        raw_text = pytesseract.image_to_string(processed, config=TESS_CONFIG)
-        conf_img = processed
+    # Combine text from all pages
+    full_text = ""
+    total_conf = 0.0
+    page_count = 0
 
-    # Calculate confidence score
-    confidence = _get_confidence(conf_img) if conf_img is not None else 0.0
+    for page_img in pages:
+        text = pytesseract.image_to_string(page_img, config=TESS_CONFIG)
+        full_text += text + "\n"
 
-    parsed = _parse_fields(raw_text)
-    parsed["rawText"] = raw_text.strip()
-    parsed["confidence"] = round(confidence, 2)
+        # Get per-word confidence
+        data = pytesseract.image_to_data(
+            page_img, config=TESS_CONFIG,
+            output_type=pytesseract.Output.DICT
+        )
+        confs = [int(c) for c in data["conf"] if str(c).isdigit() and int(c) >= 0]
+        if confs:
+            total_conf += sum(confs) / len(confs)
+            page_count += 1
 
-    return parsed
+    confidence = round(total_conf / page_count, 2) if page_count > 0 else 0.0
 
+    # Parse fields from combined text
+    result = _parse_fields(full_text)
+    result["rawText"] = full_text.strip()
+    result["confidence"] = confidence
 
-# ── Field parsers ─────────────────────────────────────────────────────────────
+    return result
+
 
 def _parse_fields(text: str) -> dict:
+    """Extract structured fields from raw OCR text using regex."""
     return {
-        "studentName": _extract_student_name(text),
-        "rollNumber":  _extract_roll_number(text),
-        "course":      _extract_course(text),
-        "institution": _extract_institution(text),
-        "marks":       _extract_marks(text),
-        "certificateId": _extract_cert_id(text),
-        "issueDate":   _extract_date(text),
+        "studentName":   _extract_student_name(text),
+        "rollNumber":    _extract_roll_number(text),
+        "course":        _extract_course(text),
+        "institution":   _extract_institution(text),
+        "issueDate":     _extract_issue_date(text),
+        "marks":         _extract_marks(text),
+        "certificateId": _extract_certificate_id(text),
     }
 
 
-def _extract_student_name(text: str) -> Optional[str]:
-    """
-    Looks for patterns like:
-      'This is to certify that [NAME]'
-      'Name: John Doe'
-      'Awarded to: JOHN DOE'
-    """
+# ── Field extractors ──────────────────────────────────────────────────────────
+
+def _extract_student_name(text: str):
     patterns = [
-        r"(?:certify\s+that|awarded\s+to|presented\s+to|this\s+certifies\s+that)[:\s]+([A-Z][a-zA-Z\s]{3,50})",
-        r"(?:student['\s]*name|name)[:\s]+([A-Z][a-zA-Z\s]{3,50})",
-        r"(?:mr\.|ms\.|mrs\.)\s+([A-Z][a-zA-Z\s]{3,40})",
+        # "certify that SHUBHAM KUMAR has" — all caps name between certify and has
+        r"certify\s+that\s+([A-Z][A-Z\s]{3,50})\s+has",
+        # "Name: Shubham Kumar"
+        r"(?:Student\s+)?Name\s*[:\-]\s*([A-Za-z][A-Za-z\s]{2,50})",
+        # "Mr./Ms. Shubham Kumar"
+        r"(?:Mr|Ms|Mrs|Dr)\.?\s+([A-Za-z][A-Za-z\s]{2,50})",
+        # All-caps line that looks like a name (2-4 words)
+        r"\n([A-Z]{2,}\s+[A-Z]{2,}(?:\s+[A-Z]{2,})?)\n",
     ]
     return _first_match(text, patterns)
 
 
-def _extract_roll_number(text: str) -> Optional[str]:
+def _extract_roll_number(text: str):
     patterns = [
-        r"(?:roll\s*(?:no|number|num)[.:\s]+)([A-Z0-9]{4,20})",
-        r"(?:enrollment\s*(?:no|number)[.:\s]+)([A-Z0-9]{4,20})",
-        r"(?:reg(?:istration)?\s*(?:no|number)[.:\s]+)([A-Z0-9]{4,20})",
-        r"\b([A-Z]{2,4}[0-9]{4,10})\b",  # e.g. CS2021001
+        r"Roll\s*(?:No|Number|#)\.?\s*[:\-]?\s*([A-Z0-9]{4,20})",
+        r"Enrollment\s*(?:No|Number)\.?\s*[:\-]?\s*([A-Z0-9]{6,20})",
+        r"Reg(?:istration)?\s*(?:No|Number)\.?\s*[:\-]?\s*([A-Z0-9]{5,20})",
+        # Pattern like CS2021001
+        r"\b([A-Z]{1,4}\d{4,8})\b",
     ]
-    return _first_match(text, patterns, flags=re.IGNORECASE)
+    return _first_match(text, patterns)
 
 
-def _extract_course(text: str) -> Optional[str]:
+def _extract_course(text: str):
     patterns = [
-        r"(?:course|degree|program(?:me)?|awarded)[:\s]+([A-Za-z\s()]{5,60}?)(?:\n|in\s|\bwith\b)",
-        r"\b(Bachelor[s']?\s+of\s+[A-Za-z\s]{3,40})\b",
-        r"\b(Master[s']?\s+of\s+[A-Za-z\s]{3,40})\b",
-        r"\b(Doctor\s+of\s+[A-Za-z\s]{3,40})\b",
-        r"\b(B\.?Tech|M\.?Tech|B\.?Sc|M\.?Sc|MBA|BCA|MCA|B\.?E|M\.?E)\b",
+        # "Bachelor of Technology (B.Tech) in Computer Science"
+        r"(Bachelor\s+of\s+Technology[^\n]{0,80})",
+        r"(Master\s+of\s+Technology[^\n]{0,80})",
+        r"(Bachelor\s+of\s+(?:Science|Arts|Commerce|Engineering)[^\n]{0,80})",
+        r"(Master\s+of\s+(?:Science|Arts|Business|Engineering)[^\n]{0,80})",
+        r"(Doctor\s+of\s+Philosophy[^\n]{0,80})",
+        # Abbreviations
+        r"\b(B\.?\s*Tech[^\n]{0,60})",
+        r"\b(M\.?\s*Tech[^\n]{0,60})",
+        r"\b(B\.?\s*Sc[^\n]{0,40})",
+        r"\b(MBA[^\n]{0,40})",
+        r"\b(MCA[^\n]{0,40})",
+        r"\b(BCA[^\n]{0,40})",
+        # "degree of ..."
+        r"degree\s+of\s+([^\n]{5,80})",
+        r"programme\s+of\s+([^\n]{5,80})",
     ]
-    return _first_match(text, patterns, flags=re.IGNORECASE)
+    return _first_match(text, patterns)
 
 
-def _extract_institution(text: str) -> Optional[str]:
+def _extract_institution(text: str):
     patterns = [
-        r"(?:university|institute|college|school|board)[:\s]+([A-Za-z\s,()]{5,80}?)(?:\n|,)",
-        r"([A-Z][A-Za-z\s]{3,60}(?:University|Institute|College|Board|School))",
+        r"([A-Z][A-Za-z\s]{3,60}(?:University|Institute|College|Academy|School)[A-Za-z\s]{0,30})",
+        r"([A-Z][A-Za-z\s]{3,60}(?:UNIVERSITY|INSTITUTE|COLLEGE)[A-Za-z\s]{0,30})",
     ]
-    return _first_match(text, patterns, flags=re.IGNORECASE)
+    return _first_match(text, patterns)
 
 
-def _extract_marks(text: str) -> Optional[str]:
+def _extract_issue_date(text: str):
     patterns = [
-        r"(?:marks?\s*obtained|total\s*marks?|score)[:\s]+([0-9]{1,4}(?:\.[0-9]{1,2})?(?:\s*/\s*[0-9]{1,4})?)",
-        r"(?:percentage|percent)[:\s]+([0-9]{1,3}(?:\.[0-9]{1,2})?)\s*%?",
-        r"(?:CGPA|GPA)[:\s]+([0-9]{1,2}(?:\.[0-9]{1,2})?)",
-        r"(?:grade)[:\s]+([A-F][+-]?)",
+        # "15th June 2025" or "15 June 2025"
+        r"(\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})",
+        # "15/06/2025" or "15-06-2025"
+        r"(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})",
+        # "June 2025"
+        r"((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})",
+        # "2025-06-15"
+        r"(\d{4}[\/\-]\d{2}[\/\-]\d{2})",
+        r"(?:Awarded|Issued|Date)\s*(?:on|:)?\s*[:\-]?\s*([^\n]{5,30})",
     ]
-    return _first_match(text, patterns, flags=re.IGNORECASE)
+    return _first_match(text, patterns)
 
 
-def _extract_cert_id(text: str) -> Optional[str]:
+def _extract_marks(text: str):
     patterns = [
-        r"(?:certificate\s*(?:no|number|id)[.:\s]+)(CERT-[A-Z0-9]{6,12}|[A-Z0-9]{8,20})",
-        r"\b(CERT-[A-Z0-9]{6,12})\b",
-        r"(?:serial\s*(?:no|number)[.:\s]+)([A-Z0-9-]{6,20})",
+        # "456 / 500" or "456/500"
+        r"(?:Marks?\s*Obtained|Marks?)\s*[:\-]?\s*(\d+\s*[\/]\s*\d+)",
+        r"(\d{2,4}\s*\/\s*\d{2,4})",
+        # "Percentage: 91.20 %" or "91.20%"
+        r"(?:Percentage|Percent)\s*[:\-]?\s*(\d+\.?\d*\s*%?)",
+        r"(\d{2,3}\.\d{1,2}\s*%)",
+        # "CGPA: 9.12 / 10"
+        r"CGPA\s*[:\-]?\s*(\d+\.\d+\s*(?:\/\s*10)?)",
+        r"Grade\s*[:\-]?\s*([A-Z][+\-]?)",
     ]
-    return _first_match(text, patterns, flags=re.IGNORECASE)
+    return _first_match(text, patterns)
 
 
-def _extract_date(text: str) -> Optional[str]:
+def _extract_certificate_id(text: str):
     patterns = [
-        r"(?:date[:\s]+|issued[:\s]+|dated[:\s]+)(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})",
-        r"(?:date[:\s]+|issued[:\s]+|dated[:\s]+)(\d{1,2}\s+\w+\s+\d{4})",
-        r"\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b",
-        r"\b(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\b",
+        # Our format: CERT-AB12CD34
+        r"\b(CERT[-\s][A-Z0-9]{6,12})\b",
+        r"Certificate\s*(?:No|Number|ID|#)\.?\s*[:\-]?\s*([A-Z0-9\-]{6,20})",
+        r"Cert(?:ificate)?\s*(?:No|ID)\.?\s*[:\-]?\s*([A-Z0-9\-]{6,20})",
+        r"Serial\s*(?:No|Number)\.?\s*[:\-]?\s*([A-Z0-9\-]{6,20})",
+        # Standalone code pattern
+        r"\b([A-Z]{2,6}[-\/][A-Z0-9]{4,12})\b",
     ]
-    return _first_match(text, patterns, flags=re.IGNORECASE)
+    return _first_match(text, patterns)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Helper ────────────────────────────────────────────────────────────────────
 
-def _first_match(text: str, patterns: list, flags=0) -> Optional[str]:
+def _first_match(text: str, patterns: list):
+    """Try each pattern, return first match stripped, or None."""
     for pattern in patterns:
-        m = re.search(pattern, text, flags)
-        if m:
-            return m.group(1).strip()
+        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            value = match.group(1).strip()
+            # Remove trailing punctuation/noise
+            value = re.sub(r"[,;:\.\s]+$", "", value).strip()
+            if len(value) >= 2:
+                return value
     return None
-
-
-def _get_confidence(image: np.ndarray) -> float:
-    """Average word-level confidence from Tesseract."""
-    try:
-        data = pytesseract.image_to_data(
-            image, config=TESS_CONFIG, output_type=pytesseract.Output.DICT
-        )
-        confs = [int(c) for c in data["conf"] if str(c).isdigit() and int(c) >= 0]
-        return sum(confs) / len(confs) if confs else 0.0
-    except Exception:
-        return 0.0
-
-    

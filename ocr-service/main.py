@@ -1,18 +1,11 @@
+import os
+import shutil
+import tempfile
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import shutil
-import os
-import tempfile
+from extractor import extract_from_file
 
-from extractor import extract_certificate_data
-from preprocessor import preprocess_image
-
-app = FastAPI(
-    title="HealBharat OCR Service",
-    description="Certificate data extraction using OCR and AI",
-    version="1.0.0",
-)
+app = FastAPI(title="HealBharat OCR Service", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,53 +14,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+ALLOWED_TYPES = {
+    "image/jpeg", "image/jpg", "image/png",
+    "application/pdf",
+}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf"}
+
 
 @app.get("/health")
-def health_check():
+def health():
     return {"status": "ok", "service": "HealBharat OCR"}
 
 
 @app.post("/extract")
-async def extract(certificate: UploadFile = File(...)):
-    """
-    Accept a certificate image (JPG/PNG) or PDF.
-    Returns extracted fields.
-    """
-
-    allowed_types = {
-        "image/jpeg",
-        "image/png",
-        "image/jpg",
-        "application/pdf",
-    }
-
-    # ✅ FIX: use certificate instead of file
-    if certificate.content_type not in allowed_types:
+async def extract(file: UploadFile = File(...)):
+    # Validate file type
+    ext = os.path.splitext(file.filename or "")[-1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail="Only JPG, PNG, PDF allowed."
+            detail=f"Unsupported file type '{ext}'. Allowed: jpg, png, pdf"
         )
 
-    # Save to temp file
-    suffix = os.path.splitext(certificate.filename)[1] or ".png"
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        shutil.copyfileobj(certificate.file, tmp)
-        tmp_path = tmp.name
-
+    # Save to temp file preserving extension (pdf2image needs the .pdf extension)
+    suffix = ext if ext else ".tmp"
+    tmp_path = None
     try:
-        result = extract_certificate_data(tmp_path)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
+        result = extract_from_file(tmp_path)
         return result
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"OCR failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"OCR extraction failed: {str(e)}")
 
     finally:
-        os.unlink(tmp_path)
-
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
