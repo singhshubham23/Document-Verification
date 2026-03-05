@@ -1,7 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "document verifying backend",
+  "description": "document verifying backend with OCR and blockchain integration",
   "license": "ISC",
   "author": "shubham",
   "type": "commonjs",
@@ -9,7 +9,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "setup": "node scripts/setup.js",
+    "blockchain:deploy": "cd ../blockchain && npm run deploy:amoy",
+    "blockchain:deploy:local": "cd ../blockchain && npm run deploy:local",
+    "ocr:start": "cd ../ocr-service && python main.py",
+    "ocr:test": "node scripts/test-ocr.js"
   },
   "dependencies": {
     "axios": "^1.6.0",

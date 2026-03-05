@@ -46,7 +46,7 @@ const runVerification = async ({
     if (certificate.blockchainTxnId) {
       try {
         blockchainVerified = await verifyBlockchainHash(
-          certificate.blockchainTxnId,
+          certificate.certificateId,
           certificate.certificateHash,
         );
         if (!blockchainVerified) {

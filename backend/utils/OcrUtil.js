@@ -1,19 +1,25 @@
-const axios = require('axios');
-const fs = require('fs');
-const FormData = require('form-data');
+/**
+ * OCR Utility - Wrapper for extracting certificate data
+ * Uses the integrated OcrService with fallback support
+ */
 
-const OCR_URL = process.env.OCR_SERVICE_URL || 'http://localhost:8000';
+const { extractCertificateData, checkOCRHealth } = require("./OcrService");
 
+/**
+ * Call OCR service to extract certificate data from file
+ * @param {string} filePath - Path to certificate file (jpg, png, pdf)
+ * @returns {Promise<object>} - Extracted certificate data
+ */
 const callOCRService = async (filePath) => {
-  const form = new FormData();
-  form.append('file', fs.createReadStream(filePath)); // ← 'file' not 'certificate'
-
-  const response = await axios.post(`${OCR_URL}/extract`, form, {
-    headers: { ...form.getHeaders() },
-    timeout: 30000,
-  });
-
-  return response.data;
+  return extractCertificateData(filePath, { fallback: true });
 };
 
-module.exports = { callOCRService };
+/**
+ * Validate OCR health & connectivity
+ * @returns {Promise<object>} - Health status info
+ */
+const validateOCRHealth = async () => {
+  return checkOCRHealth();
+};
+
+module.exports = { callOCRService, validateOCRHealth };

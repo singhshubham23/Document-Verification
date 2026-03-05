@@ -5,7 +5,11 @@ const VerificationLog = require("../models/VerificationlogModel");
 const { callOCRService } = require("../utils/OcrUtil");
 const { hashCertificate } = require("../utils/CryptoUtil");
 const { generateQRCode } = require("../utils/QrUtil");
-const { storeCertificateOnChain } = require("../utils/BlockchainUtil");
+const {
+  storeCertificateOnChain,
+  revokeCertificateOnChain,
+  isBlockchainEnabled,
+} = require("../utils/BlockchainUtil");
 
 // @desc    Upload & register a new certificate (by Institution)
 // @route   POST /api/certificates
@@ -25,21 +29,17 @@ const uploadCertificate = async (req, res, next) => {
 
     const institutionId = req.user.institutionId;
     if (!institutionId)
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Institution not linked to account.",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Institution not linked to account.",
+      });
 
     const institution = await Institution.findById(institutionId);
     if (!institution || institution.isBlacklisted)
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Institution is blacklisted or not found.",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Institution is blacklisted or not found.",
+      });
 
     const fileUrl = req.file ? req.file.path : null;
 
@@ -82,11 +82,11 @@ const uploadCertificate = async (req, res, next) => {
       certificate.qrCodeUrl = qrPath;
       await certificate.save({ validateBeforeSave: false });
     } catch (qrErr) {
-      console.error("QR generation failed (non-blocking):", qrErr.message);
+      console.error("[QR] Generation failed (non-blocking):", qrErr.message);
     }
 
     // ── Store on Blockchain (non-blocking) ────────────────
-    if (process.env.BLOCKCHAIN_RPC_URL && process.env.CONTRACT_ADDRESS) {
+    if (isBlockchainEnabled()) {
       setImmediate(async () => {
         try {
           const txnId = await storeCertificateOnChain(
@@ -99,7 +99,10 @@ const uploadCertificate = async (req, res, next) => {
             blockchainNetwork: "polygon",
           });
         } catch (e) {
-          console.error("Blockchain store failed:", e.message);
+          console.error(
+            "[Blockchain] Storage failed (non-blocking):",
+            e.message,
+          );
         }
       });
     }
@@ -113,6 +116,7 @@ const uploadCertificate = async (req, res, next) => {
       message: "Certificate registered successfully.",
       certificate,
       isDuplicate: !!duplicate,
+      blockchainEnabled: isBlockchainEnabled(),
     });
   } catch (error) {
     next(error);
@@ -154,6 +158,24 @@ const bulkUpload = async (req, res, next) => {
             Certificate.findByIdAndUpdate(created._id, { qrCodeUrl: qrPath }),
           )
           .catch(() => {});
+
+        // Store on blockchain (non-blocking)
+        if (isBlockchainEnabled()) {
+          setImmediate(async () => {
+            try {
+              const txnId = await storeCertificateOnChain(
+                created.certificateId,
+                created.certificateHash,
+              );
+              await Certificate.findByIdAndUpdate(created._id, {
+                blockchainTxnId: txnId,
+                isBlockchainVerified: true,
+              });
+            } catch (err) {
+              console.error("[Blockchain] Bulk upload failed:", err.message);
+            }
+          });
+        }
 
         if (existing) results.duplicates++;
         else results.created++;
@@ -252,6 +274,23 @@ const revokeCertificate = async (req, res, next) => {
     cert.revokedAt = new Date();
     cert.verificationStatus = "revoked";
     await cert.save();
+
+    // Revoke on blockchain (non-blocking)
+    if (isBlockchainEnabled() && cert.blockchainTxnId) {
+      setImmediate(async () => {
+        try {
+          await revokeCertificateOnChain(
+            cert.certificateId,
+            cert.revokedReason,
+          );
+          console.log(
+            `[Blockchain] Certificate ${cert.certificateId} revoked on-chain`,
+          );
+        } catch (e) {
+          console.error("[Blockchain] Revocation failed:", e.message);
+        }
+      });
+    }
 
     res.json({
       success: true,
