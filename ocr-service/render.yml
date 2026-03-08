@@ -1,9 +1,14 @@
 services:
   - type: web
-    name: healbharat-ocr
+    name: document-verification-ocr
     env: python
-    buildCommand: |
-      pip install -r requirements.txt
-      apt-get update
-      apt-get install -y tesseract-ocr poppler-utils
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    region: singapore
+    rootDir: ocr-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+    aptPackages:
+      - tesseract-ocr
+      - poppler-utils
