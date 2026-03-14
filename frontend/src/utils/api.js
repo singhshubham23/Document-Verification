@@ -27,10 +27,11 @@ api.interceptors.response.use(
       }
     }
 
-    // Normalize error message (non-breaking)
-    return Promise.reject(
-      err.response?.data?.message || err.message
-    );
+    const message =
+      err.response?.data?.message || err.message || 'Request failed';
+    err.message = message;
+    err.normalizedMessage = message;
+    return Promise.reject(err);
   }
 );
 

@@ -13,22 +13,22 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     img = np.array(image.convert("RGB"))
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    # Step 1 — Upscale if too small (Tesseract needs ~300 DPI equivalent)
+    # Step 1 -- Upscale if too small (Tesseract needs ~300 DPI equivalent)
     h, w = img.shape[:2]
     if w < 2000:
         scale = 2000 / w
         img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
 
-    # Step 2 — Grayscale
+    # Step 2 -- Grayscale
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # Step 3 — Denoise
+    # Step 3 -- Denoise
     gray = cv2.fastNlMeansDenoising(gray, h=10, templateWindowSize=7, searchWindowSize=21)
 
-    # Step 4 — Deskew
+    # Step 4 -- Deskew
     gray = _deskew(gray)
 
-    # Step 5 — Adaptive threshold (handles uneven lighting on photos)
+    # Step 5 -- Adaptive threshold (handles uneven lighting on photos)
     thresh = cv2.adaptiveThreshold(
         gray, 255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -36,7 +36,7 @@ def preprocess_image(image: Image.Image) -> Image.Image:
         31, 10
     )
 
-    # Step 6 — Morphological cleanup (remove noise dots)
+    # Step 6 -- Morphological cleanup (remove noise dots)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
     thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
 
@@ -66,7 +66,7 @@ def _deskew(gray: np.ndarray) -> np.ndarray:
 def pdf_to_images(pdf_path: str) -> list:
     """
     Convert PDF pages to preprocessed PIL Images at 300 DPI.
-    300 DPI is critical — lower DPI causes garbled OCR output.
+    300 DPI is critical -- lower DPI causes garbled OCR output.
     """
     try:
         from pdf2image import convert_from_path
@@ -75,7 +75,7 @@ def pdf_to_images(pdf_path: str) -> list:
 
     raw_pages = convert_from_path(
         pdf_path,
-        dpi=300,          # DO NOT lower this — causes garbled text
+        dpi=300,          # DO NOT lower this -- causes garbled text
         fmt="png",
         thread_count=2,
     )
@@ -85,7 +85,7 @@ def pdf_to_images(pdf_path: str) -> list:
 
 def load_and_preprocess(file_path: str) -> list:
     """
-    Main entry point — accepts image (jpg/png) or PDF.
+    Main entry point -- accepts image (jpg/png) or PDF.
     Returns list of preprocessed PIL Images.
     """
     lower = file_path.lower()
@@ -98,3 +98,4 @@ def load_and_preprocess(file_path: str) -> list:
     if img.mode in ("RGBA", "P", "CMYK"):
         img = img.convert("RGB")
     return [preprocess_image(img)]
+

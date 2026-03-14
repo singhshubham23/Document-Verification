@@ -33,7 +33,7 @@ const validateRegister = [
 
   body('role')
     .optional()
-    .isIn(['verifier', 'institution']).withMessage("Role must be 'verifier' or 'institution'"),
+    .isIn(['verifier', 'institution', 'user']).withMessage("Role must be 'verifier' or 'institution'"),
 
   body('phone')
     .optional()
@@ -133,7 +133,8 @@ const validateFraudReport = [
       'tampered_grades', 'edited_photo', 'forged_signature',
       'invalid_certificate_number', 'non_existent_institution',
       'cloned_certificate', 'expired_certificate', 'revoked_certificate',
-      'duplicate_submission', 'other',
+      'duplicate_submission', 'name_mismatch', 'roll_mismatch',
+      'not_found', 'blockchain_mismatch', 'hash_mismatch', 'other',
     ]).withMessage('Invalid fraud type'),
   body('description').optional().trim().isLength({ max: 2000 }),
   validate,

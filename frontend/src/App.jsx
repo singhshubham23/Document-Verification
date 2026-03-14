@@ -15,6 +15,7 @@ import FraudReportPage from './pages/FraudReportPage';
 
 // Pages — Institution
 import InstitutionDashboard from './pages/InstitutionDashboard';
+import InstitutionCertificates from './pages/InstitutionCertificates';
 
 // Pages — Admin
 import AdminDashboard    from './pages/AdminDashboard';
@@ -69,7 +70,7 @@ export default function App() {
             } />
             <Route path="/certificates" element={
               <RoleRoute roles={['institution', 'admin']}>
-                <InstitutionDashboard />
+                <InstitutionCertificates />
               </RoleRoute>
             } />
 

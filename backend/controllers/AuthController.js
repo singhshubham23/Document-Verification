@@ -13,6 +13,7 @@ const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString()
 exports.register = async (req, res, next) => {
   try {
     const { name, email, phone, password, role, institutionName, location } = req.body;
+    const normalizedRole = role === 'user' ? 'verifier' : role;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -25,7 +26,7 @@ exports.register = async (req, res, next) => {
     let institutionId = undefined;
 
     // 🔥 If registering as institution → create Institution document
-   if (role === 'institution') {
+   if (normalizedRole === 'institution') {
 
   if (!institutionName) {
     return res.status(400).json({
@@ -63,7 +64,7 @@ exports.register = async (req, res, next) => {
       email,
       phone,
       password,
-      role: role || 'verifier',
+      role: normalizedRole || 'verifier',
       institutionId,
       otp,
       otpExpiry,

@@ -152,9 +152,46 @@ const runVerification = async ({
   };
 };
 
-// Simple fuzzy match (case-insensitive, trim whitespace)
+// Better fuzzy match for names (case-insensitive, remove honorifics/noise)
+const NAME_STOPWORDS = new Set([
+  "mr",
+  "ms",
+  "mrs",
+  "dr",
+  "prof",
+  "professor",
+  "roll",
+  "number",
+  "no",
+  "rollno",
+  "rollnumber",
+  "enrollment",
+  "enrollmentno",
+  "reg",
+  "registration",
+  "registrationno",
+  "id",
+  "student",
+  "name",
+]);
+
+const normalizeName = (s) =>
+  s
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .filter((t) => !NAME_STOPWORDS.has(t))
+    .join(" ");
+
 const fuzzyMatch = (a, b) => {
-  return a?.toLowerCase().trim() === b?.toLowerCase().trim();
+  if (!a || !b) return false;
+  const aClean = normalizeName(a);
+  const bClean = normalizeName(b);
+  if (!aClean || !bClean) return false;
+  return aClean === bClean;
 };
 
 // @desc    Verify by Certificate ID (text input)

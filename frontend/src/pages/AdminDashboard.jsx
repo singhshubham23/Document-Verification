@@ -80,7 +80,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Stat grid */}
-      <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <StatCard icon={Users}       label="Total Users"         value={stats?.totalUsers}         color="jade" />
         <StatCard icon={Building2}   label="Institutions"        value={stats?.totalInstitutions}  color="sky" />
         <StatCard icon={FileText}    label="Certificates"        value={stats?.totalCertificates}  color="violet" />

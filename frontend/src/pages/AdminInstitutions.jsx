@@ -81,7 +81,7 @@ export default function AdminInstitutions() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-100 flex items-center gap-3">
             <Building2 className="w-6 h-6 text-jade-400" /> Institutions
@@ -177,7 +177,7 @@ function CreateInstitutionForm({ onSuccess, onCancel }) {
     <Card className="border border-jade-500/15">
       <h3 className="font-display font-semibold text-slate-200 mb-5">Register New Institution</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Institution Name" placeholder="XYZ University" required {...f('name')} />
           <Input label="Short Code" placeholder="XYZ-UNIV" {...f('code')} />
           <Input label="City" placeholder="Mumbai" {...f('location.city')} />

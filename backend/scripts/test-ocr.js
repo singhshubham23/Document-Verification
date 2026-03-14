@@ -18,10 +18,10 @@ const colors = {
 };
 
 const log = {
-  section: (msg) => console.log(`\n${colors.cyan}➜ ${msg}${colors.reset}`),
-  success: (msg) => console.log(`${colors.green}✓ ${msg}${colors.reset}`),
-  error: (msg) => console.log(`${colors.red}✗ ${msg}${colors.reset}`),
-  warn: (msg) => console.log(`${colors.yellow}⚠ ${msg}${colors.reset}`),
+  section: (msg) => console.log(`\n${colors.cyan}> ${msg}${colors.reset}`),
+  success: (msg) => console.log(`${colors.green}OK ${msg}${colors.reset}`),
+  error: (msg) => console.log(`${colors.red}ERR ${msg}${colors.reset}`),
+  warn: (msg) => console.log(`${colors.yellow}WARN ${msg}${colors.reset}`),
 };
 
 async function testOCRHTTP() {
@@ -91,7 +91,7 @@ async function testBackendOCRIntegration() {
 }
 
 async function main() {
-  console.log("\n🧪 OCR Service Test Suite\n");
+  console.log("\nOCR Service Test Suite\n");
 
   const httpOK = await testOCRHTTP();
   const localOK = await testOCRLocal();
@@ -99,13 +99,13 @@ async function main() {
 
   log.section("Test Summary");
   console.log(
-    `  HTTP Mode:        ${httpOK ? colors.green + "✓" + colors.reset : colors.yellow + "✗" + colors.reset}`,
+    `  HTTP Mode:        ${httpOK ? colors.green + "OK" + colors.reset : colors.yellow + "X" + colors.reset}`,
   );
   console.log(
-    `  Local Mode:       ${localOK ? colors.green + "✓" + colors.reset : colors.yellow + "✗" + colors.reset}`,
+    `  Local Mode:       ${localOK ? colors.green + "OK" + colors.reset : colors.yellow + "X" + colors.reset}`,
   );
   console.log(
-    `  Integration:      ${integrationOK ? colors.green + "✓" + colors.reset : colors.yellow + "✗" + colors.reset}`,
+    `  Integration:      ${integrationOK ? colors.green + "OK" + colors.reset : colors.yellow + "X" + colors.reset}`,
   );
 
   if (!httpOK && !localOK) {
@@ -123,3 +123,5 @@ async function main() {
 }
 
 main().catch(console.error);
+
+

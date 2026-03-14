@@ -35,6 +35,12 @@ async def extract(file: UploadFile = File(...)):
             status_code=400,
             detail=f"Unsupported file type '{ext}'. Allowed: jpg, png, pdf"
         )
+    content_type = (file.content_type or "").lower()
+    if content_type and content_type not in ALLOWED_TYPES and content_type != "application/octet-stream":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported content type '{content_type}'. Allowed: jpg, png, pdf"
+        )
 
     # Save to temp file preserving extension (pdf2image needs the .pdf extension)
     suffix = ext if ext else ".tmp"

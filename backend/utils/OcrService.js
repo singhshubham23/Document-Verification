@@ -18,6 +18,7 @@ const OCR_SERVICE_URL = process.env.OCR_SERVICE_URL || "http://localhost:8000";
 const PYTHON_PATH = process.env.PYTHON_PATH || "python";
 const OCR_SERVICE_PATH =
   process.env.OCR_SERVICE_PATH || path.join(__dirname, "../../ocr-service");
+const PROCESS_TIMEOUT_MS = 120000;
 
 /**
  * Call OCR service via HTTP (external FastAPI service)
@@ -44,6 +45,8 @@ const callOCRServiceViaHTTP = async (filePath) => {
  */
 const callOCRServiceLocal = async (filePath) => {
   return new Promise((resolve, reject) => {
+    let timedOut = false;
+    let timeoutId = null;
     try {
       // Prepare the Python command
       const pythonScript = path.join(OCR_SERVICE_PATH, "extract_local.py");
@@ -55,8 +58,17 @@ const callOCRServiceLocal = async (filePath) => {
 
       const process = spawn(PYTHON_PATH, [pythonScript, filePath], {
         cwd: OCR_SERVICE_PATH,
-        timeout: 120000, // 2 minutes timeout
+        timeout: PROCESS_TIMEOUT_MS, // 2 minutes timeout (best-effort)
       });
+
+      timeoutId = setTimeout(() => {
+        timedOut = true;
+        try {
+          process.kill();
+        } catch (e) {
+          // Ignore kill errors; close handler will report timeout
+        }
+      }, PROCESS_TIMEOUT_MS);
 
       let output = "";
       let errorOutput = "";
@@ -70,6 +82,14 @@ const callOCRServiceLocal = async (filePath) => {
       });
 
       process.on("close", (code) => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        if (timedOut) {
+          return reject(
+            new Error(`OCR process timed out after ${PROCESS_TIMEOUT_MS}ms`),
+          );
+        }
         if (code !== 0) {
           console.error("Python OCR stderr:", errorOutput);
           return reject(
@@ -86,6 +106,9 @@ const callOCRServiceLocal = async (filePath) => {
       });
 
       process.on("error", (err) => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         reject(new Error(`Failed to spawn OCR process: ${err.message}`));
       });
     } catch (error) {
@@ -98,7 +121,7 @@ const callOCRServiceLocal = async (filePath) => {
  * Main OCR extraction function with fallback mechanism
  */
 const extractCertificateData = async (filePath, options = {}) => {
-  const fallbackMode = options.fallback || true;
+  const fallbackMode = options.fallback ?? true;
 
   if (!fs.existsSync(filePath)) {
     throw new Error(`File not found: ${filePath}`);

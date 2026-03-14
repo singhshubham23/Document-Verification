@@ -89,7 +89,7 @@ export default function AdminLogs() {
       </div>
 
       {/* Filter bar */}
-      <Card className="flex gap-2 items-center py-4">
+      <Card className="flex flex-wrap gap-2 items-center py-4">
         <Filter className="w-4 h-4 text-slate-500 mr-1" />
         {FILTERS.map((f) => (
           <button
@@ -104,7 +104,7 @@ export default function AdminLogs() {
             {f.label}
           </button>
         ))}
-        <div className="ml-auto text-xs font-mono text-slate-600">
+        <div className="w-full sm:w-auto sm:ml-auto text-xs font-mono text-slate-600">
           Showing {Math.min((page - 1) * 30 + 1, total)}–{Math.min(page * 30, total)} of {total}
         </div>
       </Card>

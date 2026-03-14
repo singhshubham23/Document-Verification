@@ -150,7 +150,7 @@ export function AdminFraud() {
         <p className="text-slate-500 font-mono text-sm">{total} total</p>
       </div>
 
-      <Card className="flex gap-2 py-4 items-center">
+      <Card className="flex flex-wrap gap-2 py-4 items-center">
         {STATUSES.map((s) => (
           <button key={s.value}
             onClick={() => { setStatus(s.value); setPage(1); }}

@@ -103,7 +103,7 @@ export default function FraudReportPage() {
             <label className="block text-sm font-display text-slate-400">
               Fraud Type <span className="text-rose-400">*</span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {FRAUD_TYPES.map((t) => (
                 <button
                   key={t.value}
@@ -168,7 +168,7 @@ export default function FraudReportPage() {
         ) : (
           <div className="space-y-3">
             {myReports.map((r) => (
-              <Card key={r._id} className="flex items-start justify-between gap-4 py-4">
+              <Card key={r._id} className="flex flex-col sm:flex-row items-start justify-between gap-4 py-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-mono text-xs text-jade-400">

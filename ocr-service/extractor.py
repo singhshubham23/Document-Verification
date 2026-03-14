@@ -4,8 +4,8 @@ from PIL import Image
 from preprocessor import load_and_preprocess
 
 
-# Tesseract config — OEM 3 = LSTM, PSM 6 = assume uniform block of text
-TESS_CONFIG = "--oem 3 --psm 6 -l eng"
+# Tesseract config -- OEM 3 = LSTM, PSM 3 = fully automatic page segmentation
+TESS_CONFIG = "--oem 3 --psm 3 -l eng"
 
 
 def extract_from_file(file_path: str) -> dict:
@@ -58,16 +58,16 @@ def _parse_fields(text: str) -> dict:
     }
 
 
-# ── Field extractors ──────────────────────────────────────────────────────────
+# -- Field extractors --
 
 def _extract_student_name(text: str):
     patterns = [
-        # "certify that SHUBHAM KUMAR has" — all caps name between certify and has
+        # "certify that SHUBHAM KUMAR has" -- all caps name between certify and has
         r"certify\s+that\s+([A-Z][A-Z\s]{3,50})\s+has",
         # "Name: Shubham Kumar"
-        r"(?:Student\s+)?Name\s*[:\-]\s*([A-Za-z][A-Za-z\s]{2,50})",
+        r"(?:Student\s+)?Name\s*[:\-]\s*([A-Za-z][A-Za-z\s]{2,50}?)(?=\s+(?:Roll|Enrollment|Reg(?:istration)?|Certificate|ID)\b|\n|$)",
         # "Mr./Ms. Shubham Kumar"
-        r"(?:Mr|Ms|Mrs|Dr)\.?\s+([A-Za-z][A-Za-z\s]{2,50})",
+        r"(?:Mr|Ms|Mrs|Dr)\.?\s+([A-Za-z][A-Za-z\s]{2,50})(?=\s+(?:Roll|Enrollment|Reg(?:istration)?|Certificate|ID)\b|\n|$)",
         # All-caps line that looks like a name (2-4 words)
         r"\n([A-Z]{2,}\s+[A-Z]{2,}(?:\s+[A-Z]{2,})?)\n",
     ]
@@ -76,11 +76,12 @@ def _extract_student_name(text: str):
 
 def _extract_roll_number(text: str):
     patterns = [
-        r"Roll\s*(?:No|Number|#)\.?\s*[:\-]?\s*([A-Z0-9]{4,20})",
+        # Specific pattern (e.g., CS2021001) first
+        r"\b([A-Z]{1,4}\d{4,8})\b",
+        # Labels, but excluding common noises that OCR might misread as the value
+        r"Roll\s*(?:No|Number|#)\.?\s*[:\-]?\s*(?!(?:Certificate|No|Enrollment)\b)([A-Z0-9]{4,20})",
         r"Enrollment\s*(?:No|Number)\.?\s*[:\-]?\s*([A-Z0-9]{6,20})",
         r"Reg(?:istration)?\s*(?:No|Number)\.?\s*[:\-]?\s*([A-Z0-9]{5,20})",
-        # Pattern like CS2021001
-        r"\b([A-Z]{1,4}\d{4,8})\b",
     ]
     return _first_match(text, patterns)
 
@@ -108,11 +109,21 @@ def _extract_course(text: str):
 
 
 def _extract_institution(text: str):
+    # Filter out lines that look like signatures (e.g., "Vice Chancellor", "Registrar")
+    lines = text.split("\n")
+    signature_words = ["Controller", "Registrar", "Chancellor", "Bear", "Rations"]
+    filtered_lines = [line for line in lines if not any(word in line for word in signature_words)]
+    filtered_text = "\n".join(filtered_lines)
+
     patterns = [
-        r"([A-Z][A-Za-z\s]{3,60}(?:University|Institute|College|Academy|School)[A-Za-z\s]{0,30})",
-        r"([A-Z][A-Za-z\s]{3,60}(?:UNIVERSITY|INSTITUTE|COLLEGE)[A-Za-z\s]{0,30})",
+        r"([A-Z][A-Za-z\s]{5,60}(?:University|Institute|College|Academy|School)[A-Za-z\s]{0,30})",
+        r"([A-Z][A-Za-z\s]{5,60}(?:UNIVERSITY|INSTITUTE|COLLEGE)[A-Za-z\s]{0,30})",
     ]
-    return _first_match(text, patterns)
+    # Try with filtered text first
+    result = _first_match(filtered_text, patterns)
+    if not result:
+        result = _first_match(text, patterns)
+    return result
 
 
 def _extract_issue_date(text: str):
@@ -158,7 +169,7 @@ def _extract_certificate_id(text: str):
     return _first_match(text, patterns)
 
 
-# ── Helper ────────────────────────────────────────────────────────────────────
+# -- Helper --
 
 def _first_match(text: str, patterns: list):
     """Try each pattern, return first match stripped, or None."""
@@ -171,3 +182,4 @@ def _first_match(text: str, patterns: list):
             if len(value) >= 2:
                 return value
     return None
+
